@@ -26,4 +26,3 @@ end
 --it will lead to a dead loop bug
 --loop 3-10 times a sec
 --so there is a configuration in lewei.lua#69-75
---haven't found reason yet
