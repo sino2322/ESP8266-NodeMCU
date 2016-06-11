@@ -33,6 +33,8 @@ local function readSwitch()
     return sw
 end
 
+    
+
 function M.getallsensors()
     T3,H3=DHT()
     A3=ADC()
@@ -41,6 +43,9 @@ function M.getallsensors()
 end
 
 function M.switch(p1,p2)--waiting to extend
-    print('control received! program not completed yet!')
+    --print('control received! program not completed yet!')
+    if p1=='S3' then
+        gpio.mode(switch_pin_write, gpio.OUTPUT)
+        gpio.write(switch_pin_write,p2)
+    end
 end
-

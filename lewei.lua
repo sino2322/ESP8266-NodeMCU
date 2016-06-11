@@ -15,11 +15,21 @@ local userKey=nil
 local lasttime=0--tmrcnt init
 local nowtime=nil--tmrcnt
 
+--local function updateSwitchs()
+    --require('sensors')
+    --T3,H3,S3,A3 = sensors.getallsensors()
+    
+    --data='{\"Name\":\"S3\",\"Value\":\"'..S3..'\"}'
+    --data='{\"Name\":\"T3\",\"Value\":\"'..T3..'\"},'..data
+    --feedback='{\"method\":\"upload\",\"data\":['..data..']}&^!'
+    
+--end
+
 --deal response
 local function dealResponse(str)
     str=string.gsub (str, '&^!','')
     luat = cjson.decode(str)
-    if luat.f == 'getAllSensors' then--severå¼€å…³é‡ä½¿èƒ½
+    if luat.f == 'getAllSensors' then--sever¿ª¹ØÁ¿Ê¹ÄÜ
         require('sensors')
         T3,H3,S3,A3 = sensors.getallsensors()
         data='{\"id\":\"A3\",\"value\":\"'..A3..'\"}'
@@ -32,15 +42,26 @@ local function dealResponse(str)
         data=nil
         feedback=nil
     end
-    if luat.f == 'LEDcontrol' then--è‡ªå®šä¹‰å‘½ä»¤
+    if luat.f == 'LEDcontrol' then--×Ô¶¨ÒåÃüÁî
         require('sensors')
         sensors.switch(luat.p1,luat.p2)--return0 if ON,return1 if OFF
-        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"ok\"}}&^!'
+        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"received\"}}&^!'
         socket:send(feedback)
         feedback=nil
     end
-    if luat.f == 'updateSensors' then  --response sever's request to control local obj
-      
+    if luat.f == 'updateSensor' then  --response sever's request to control local obj
+        require('sensors')
+        sensors.switch(luat.p1,luat.p2)
+        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"received\"}}&^!'
+        --print(feedback)
+        
+        socket:send(feedback)
+        feedback=nil
+        --tmr.alarm(4, 1000, tmr.ALARM_SINGLE,
+        --function()
+            --updateSwitchs()
+        --end)
+
     end
     --if luat.f == 'getAllSensors' then  --extend use
     str=nil
@@ -60,23 +81,25 @@ local function connectServer()
      function(sck, response)
           print("Server Disconnected")
           bConnected = false
-          connectServer()
+          --save pwr
+          if LPWR==nil then
+            connectServer()
+          end
      end)
      socket:on("receive",
      function(sck, response)
           print("receive"..response)
-
           dealResponse(response)
-          
-          isrecvd = nil
      end)
      socket:on("sent",
      function(sck, response)
           nowtime=tmr.now()
           print("sent at systime "..nowtime..' us')
           delta=nowtime-lasttime--to culculate time between loops
-          if delta<300000 then--prevent dead loop
-            node.restart()--once entered dead loop,then restart
+          if delta<100000 then--prevent dead loop
+            if delta>0 then
+                node.restart()--once entered dead loop,then restart
+            end
           end
           lasttime=nowtime
      end)
@@ -91,6 +114,7 @@ local function keepOnline()
           connectServer()
      end
 end
+
 
 function M.updateSensors()
     require('sensors')
@@ -112,7 +136,7 @@ function M.init()--keep online,svr control avaliable
     file.open("usercfg.lua", "r")
     userKey=file.readline()--read line 
     --print(userKey)
-    userKey=string.gsub (userKey, ':userkey\n','')--å»é™¤\n
+    userKey=string.gsub (userKey, ':userkey\n','')--È¥³ı\n
     gateWay=file.readline()--read line
     --print(gateWay)
     gateWay=string.gsub (gateWay, ':gateway\n','')
@@ -128,19 +152,17 @@ function M.init()--keep online,svr control avaliable
     )
 end
 
-function M.postSensors()--do not keep online,svr control not avaliable
+function M.linit()--do not keep online,svr control not avaliable
     file.open("usercfg.lua", "r")
     userKey=file.readline()--read line 
     --print(userKey)
-    userKey=string.gsub (userKey, ':userkey\n','')--å»é™¤\n
+    userKey=string.gsub (userKey, ':userkey\n','')--È¥³ı\n
     gateWay=file.readline()--read line
     --print(gateWay)
     gateWay=string.gsub (gateWay, ':gateway\n','')
     file.close()
-
-    
-
+    strOnline = "{\"method\":\"update\",\"gatewayNo\":\""..gateWay.."\",\"userkey\":\""..userKey.."\"}&^!"
     userKey=nil
     gateWay=nil
-
+    connectServer()
 end
