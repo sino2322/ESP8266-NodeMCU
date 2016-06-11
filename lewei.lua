@@ -8,14 +8,13 @@ local port = 9960
 local bConnected = false
 local data = nil
 local feedback = nil
-local T3,H3,S3,A3=nil--sensors
+local T3,H3,S3,A3=nil--sensors' id
 local strOnline=nil
 local gateWay=nil
 local userKey=nil
 local lasttime=0--tmrcnt init
 local nowtime=nil--tmrcnt
 
---deal response
 local function dealResponse(str)
     str=string.gsub (str, '&^!','')
     luat = cjson.decode(str)
@@ -35,13 +34,29 @@ local function dealResponse(str)
     if luat.f == 'LEDcontrol' then--自定义命令
         require('sensors')
         sensors.switch(luat.p1,luat.p2)--return0 if ON,return1 if OFF
-        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"ok\"}}&^!'
+        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"received\"}}&^!'
         socket:send(feedback)
         feedback=nil
     end
-    if luat.f == 'updateSensors' then  --response sever's request to control local obj
-      
+    if luat.f == 'updateSensor' then  --response sever's request to control local obj
+        require('sensors')
+        sensors.switch(luat.p1,luat.p2)
+        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"received\"}}&^!'
+        --print(feedback)
+        
+        socket:send(feedback)
+        feedback=nil
     end
+    if luat.f == 'RGBSET' then
+        require('sensors')
+        sensors.RGBset(luat.p1,luat.p2,luat.p3,luat.p4)
+        feedback='{\"method\":\"response\",\"result\":{\"successful\":true,\"message\":\"received\"}}&^!'
+        socket:send(feedback)
+        feedback=nil
+    end
+    
+    --extend your orders
+    --if luat.f == 'getAllSensors' then  --extend use
     --if luat.f == 'getAllSensors' then  --extend use
     str=nil
     luat=nil
@@ -60,23 +75,25 @@ local function connectServer()
      function(sck, response)
           print("Server Disconnected")
           bConnected = false
-          connectServer()
+          --save pwr
+          if LPWR==nil then
+            connectServer()
+          end
      end)
      socket:on("receive",
      function(sck, response)
           print("receive"..response)
-
           dealResponse(response)
-          
-          isrecvd = nil
      end)
      socket:on("sent",
      function(sck, response)
           nowtime=tmr.now()
           print("sent at systime "..nowtime..' us')
           delta=nowtime-lasttime--to culculate time between loops
-          if delta<300000 then--prevent dead loop
-            node.restart()--once entered dead loop,then restart
+          if delta<100000 then--prevent dead loop
+            if delta>0 then
+                node.restart()--once entered dead loop,then restart
+            end
           end
           lasttime=nowtime
      end)
@@ -91,6 +108,7 @@ local function keepOnline()
           connectServer()
      end
 end
+
 
 function M.updateSensors()
     require('sensors')
@@ -128,7 +146,7 @@ function M.init()--keep online,svr control avaliable
     )
 end
 
-function M.postSensors()--do not keep online,svr control not avaliable
+function M.linit()--do not keep online,svr control not avaliable
     file.open("usercfg.lua", "r")
     userKey=file.readline()--read line 
     --print(userKey)
@@ -137,10 +155,8 @@ function M.postSensors()--do not keep online,svr control not avaliable
     --print(gateWay)
     gateWay=string.gsub (gateWay, ':gateway\n','')
     file.close()
-
-    
-
+    strOnline = "{\"method\":\"update\",\"gatewayNo\":\""..gateWay.."\",\"userkey\":\""..userKey.."\"}&^!"
     userKey=nil
     gateWay=nil
-
+    connectServer()
 end
